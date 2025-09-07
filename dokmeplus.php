@@ -3,7 +3,7 @@
  * Plugin Name: Dokme Plus
  * Plugin URI: https://hamtamehr.ir/shop/kf-j59n/lo55hg22
  * Description: Create custom buttons with actions like link, copy, share, call, and SMS. Free version allows up to 3 buttons.
- * Version: 1.10
+ * Version: 1.11
  * Author: Hajirahimi
  * Author URI: https://hajirahimi.ir
  * License: GPLv2 or later
@@ -595,3 +595,4 @@ function dokmeplus_plugins_api($result, $action, $args) {
 
     return $info;
 }
+
