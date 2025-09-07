@@ -3,7 +3,7 @@
 Plugin Name: Dokme Plus
 Plugin URI: https://github.com/hajirahimi-ir/dokmeplus
 Description: افزونه ساخت دکمه‌های سفارشی با قابلیت لینک، کپی متن، ارسال متن، تماس و پیامک.
-Version: 1.0
+Version: 1.9
 Author: Hajirahimi
 Author URI: https://hajirahimi.ir
 License: GPL2
@@ -231,3 +231,4 @@ function dokmeplus_plugins_api($result, $action, $args) {
         ],
     ];
 }
+
