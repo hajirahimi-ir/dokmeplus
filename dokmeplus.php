@@ -3,7 +3,7 @@
  * Plugin Name: Dokme Plus
  * Plugin URI: https://hamtamehr.ir/shop/kf-j59n/lo55hg22
  * Description: Create custom buttons with actions like link, copy, share, call, and SMS. Free version allows up to 3 buttons.
- * Version: 1.11
+ * Version: 1.11.2
  * Author: Hajirahimi
  * Author URI: https://hajirahimi.ir
  * License: GPLv2 or later
@@ -127,7 +127,7 @@ function dokmeplus_check_license_remote( $license ) {
         return ['valid' => false, 'message' => dokmeplus_t('license_missing')];
     }
 
-    $domain = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field($_SERVER['SERVER_NAME']) : parse_url(home_url(), PHP_URL_HOST);
+    $domain = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field($_SERVER['SERVER_NAME']) : sanitize_text_field(parse_url(home_url(), PHP_URL_HOST));
 
     $response = wp_remote_post( HAMTAMEHR_LICENSE_API, array(
         'timeout' => 15,
@@ -220,7 +220,7 @@ add_action('admin_notices', function() {
     if ( is_array($cached) ) {
         if ( ! $cached['valid'] ) {
             echo '<div class="notice notice-error"><p>'
-                . esc_html( $cached['message'] )
+                . esc_html( sanitize_text_field($cached['message']) )
                 . ' | ' . $buy_link_html
                 . '</p></div>';
         }
@@ -237,17 +237,25 @@ add_action('admin_notices', function() {
 });
 
 /* ---------------------------
-  حذف دکمه (via GET delete_id)
+  حذف دکمه (via GET delete_id) — امن‌شده با nonce و sanitize
 ---------------------------- */
 add_action('admin_init', function() {
     if ( isset($_GET['delete_id']) && current_user_can('manage_options') ) {
-        $id = sanitize_text_field($_GET['delete_id']);
+        $id_raw = $_GET['delete_id'];
+        $id = is_numeric($id_raw) ? absint($id_raw) : sanitize_text_field($id_raw);
+
+        // nonce verification: نام action هم با تولید لینک همخوان باشد
+        if ( ! isset($_GET['_wpnonce']) || ! wp_verify_nonce( wp_unslash($_GET['_wpnonce']), 'dokmeplus_delete_' . $id ) ) {
+            // invalid nonce: do nothing or optionally show error
+            return;
+        }
+
         $all = get_option('dokmeplus_buttons', []);
         if ( isset($all[$id]) ) {
             unset($all[$id]);
             update_option('dokmeplus_buttons', $all);
         }
-        wp_redirect(admin_url('admin.php?page=dokmeplus'));
+        wp_safe_redirect(admin_url('admin.php?page=dokmeplus'));
         exit;
     }
 });
@@ -261,20 +269,35 @@ add_shortcode('dokmeplus', function($atts) {
     $id = $atts['id'];
     if ( ! isset($buttons[$id]) ) return '';
     $b = $buttons[$id];
-    $style = 'background-color:' . esc_attr($b['color']) . '; font-size:' . intval($b['size']) . 'px; padding:10px 20px; color:white; border:none; border-radius:5px; cursor:pointer;';
-    switch ( $b['action'] ) {
+
+    // آماده‌سازی امن خروجی‌ها
+    $title = esc_html($b['title'] ?? '');
+    $text = esc_html($b['text'] ?? '');
+    $color = esc_attr($b['color'] ?? '#0073aa');
+    $size = intval($b['size'] ?? 16);
+
+    $style = 'background-color:' . $color . '; font-size:' . $size . 'px; padding:10px 20px; color:white; border:none; border-radius:5px; cursor:pointer;';
+
+    switch ( $b['action'] ?? 'link' ) {
         case 'link':
-            return '<a href="' . esc_url($b['link']) . '" target="_blank" rel="noopener noreferrer"><button style="' . $style . '">' . esc_html($b['text']) . '</button></a>';
+            return '<a href="' . esc_url($b['link'] ?? '') . '" target="_blank" rel="noopener noreferrer"><button style="' . $style . '">' . $text . '</button></a>';
         case 'copy':
-            return '<button style="' . $style . '" onclick="navigator.clipboard.writeText(\'' . esc_js($b['copy_text']) . '\'); alert(\'' . esc_js(dokmeplus_t('saved')) . '\');">' . esc_html($b['text']) . '</button>';
+            // escape for JS
+            $copy_text_js = esc_js($b['copy_text'] ?? '');
+            $saved_js = esc_js(dokmeplus_t('saved'));
+            return '<button style="' . $style . '" onclick="navigator.clipboard.writeText(\'' . $copy_text_js . '\'); alert(\'' . $saved_js . '\');">' . $text . '</button>';
         case 'send':
-            return '<button style="' . $style . '" onclick="if(navigator.share){navigator.share({text: \'' . esc_js($b['send_text']) . '\'});}else{alert(\'' . esc_js(dokmeplus_t('license_error')) . '\');}">' . esc_html($b['text']) . '</button>';
+            $send_text_js = esc_js($b['send_text'] ?? '');
+            $err_js = esc_js(dokmeplus_t('license_error'));
+            return '<button style="' . $style . '" onclick="if(navigator.share){navigator.share({text: \'' . $send_text_js . '\'});}else{alert(\'' . $err_js . '\');}">' . $text . '</button>';
         case 'call':
-            return '<a href="tel:' . esc_attr($b['call_number']) . '"><button style="' . $style . '">' . esc_html($b['text']) . '</button></a>';
+            return '<a href="tel:' . esc_attr($b['call_number'] ?? '') . '"><button style="' . $style . '">' . $text . '</button></a>';
         case 'sms':
-            return '<a href="sms:' . esc_attr($b['sms_number']) . '?body=' . urlencode($b['sms_message']) . '"><button style="' . $style . '">' . esc_html($b['text']) . '</button></a>';
+            $sms_number = esc_attr($b['sms_number'] ?? '');
+            $sms_message = isset($b['sms_message']) ? rawurlencode($b['sms_message']) : '';
+            return '<a href="sms:' . $sms_number . '?body=' . $sms_message . '"><button style="' . $style . '">' . $text . '</button></a>';
         default:
-            return '<button style="' . $style . '">' . esc_html($b['text']) . '</button>';
+            return '<button style="' . $style . '">' . $text . '</button>';
     }
 });
 
@@ -305,10 +328,14 @@ function dokmeplus_list_page() {
             <?php
             if ( $all ) {
                 foreach ( $all as $id => $btn ) {
+                    $id_attr = esc_attr($id);
+                    $edit_url = esc_url( admin_url('admin.php?page=dokmeplus_add&edit_id=' . rawurlencode($id)) );
+                    // لینک حذف با nonce امن ساخته می‌شود (action: dokmeplus_delete_$id)
+                    $delete_url = wp_nonce_url( admin_url('admin.php?page=dokmeplus&delete_id=' . rawurlencode($id)), 'dokmeplus_delete_' . $id );
                     echo '<tr>';
                     echo '<td>' . esc_html( $btn['title'] ) . '</td>';
-                    echo '<td>[dokmeplus id="' . esc_attr($id) . '"]</td>';
-                    echo '<td><a href="' . esc_url(admin_url('admin.php?page=dokmeplus_add&edit_id=' . $id)) . '">' . esc_html(dokmeplus_t('edit')) . '</a> | <a href="' . esc_url(admin_url('admin.php?page=dokmeplus&delete_id=' . $id)) . '" onclick="return confirm(\'' . esc_js(dokmeplus_t('confirm_delete')) . '\')">' . esc_html(dokmeplus_t('delete')) . '</a></td>';
+                    echo '<td>[dokmeplus id="' . $id_attr . '"]</td>';
+                    echo '<td><a href="' . $edit_url . '">' . esc_html(dokmeplus_t('edit')) . '</a> | <a href="' . $delete_url . '" onclick="return confirm(\'' . esc_js(dokmeplus_t('confirm_delete')) . '\')">' . esc_html(dokmeplus_t('delete')) . '</a></td>';
                     echo '</tr>';
                 }
             } else {
@@ -323,6 +350,7 @@ function dokmeplus_list_page() {
 
 /* ---------------------------
   صفحه افزودن / ویرایش دکمه
+  — تابع نمایش فرم (فقط نمایش). ذخیره در بخش admin_post انجام می‌شود.
 ---------------------------- */
 function dokmeplus_form_page() {
     if ( ! current_user_can('manage_options') ) wp_die('Access denied');
@@ -341,48 +369,17 @@ function dokmeplus_form_page() {
         }
     }
 
-    // ذخیره فرم
-    if ( $_SERVER['REQUEST_METHOD'] === 'POST' ) {
-        if ( ! isset($_POST['_dokmeplus_nonce']) || ! wp_verify_nonce($_POST['_dokmeplus_nonce'], 'dokmeplus_save') ) {
-            wp_die('Invalid nonce');
-        }
-
-        $is_valid = dokmeplus_is_license_valid();
-        $count = is_array($all) ? count($all) : 0;
-        $is_new = empty($edit_id);
-        if ( $is_new && ! $is_valid && $count >= 3 ) {
-            wp_safe_redirect(admin_url('admin.php?page=dokmeplus&blocked=1'));
-            exit;
-        }
-
-        $data = [
-            'title' => sanitize_text_field($_POST['title'] ?? ''),
-            'text'  => sanitize_text_field($_POST['text'] ?? ''),
-            'color' => sanitize_text_field($_POST['color'] ?? '#0073aa'),
-            'size'  => intval($_POST['size'] ?? 16),
-            'action'=> sanitize_text_field($_POST['action'] ?? 'link'),
-            'link'  => esc_url_raw($_POST['link'] ?? ''),
-            'copy_text' => sanitize_text_field($_POST['copy_text'] ?? ''),
-            'send_text' => sanitize_text_field($_POST['send_text'] ?? ''),
-            'call_number'=> sanitize_text_field($_POST['call_number'] ?? ''),
-            'sms_number' => sanitize_text_field($_POST['sms_number'] ?? ''),
-            'sms_message'=> sanitize_textarea_field($_POST['sms_message'] ?? ''),
-        ];
-
-        $id = $edit_id ?: time();
-        $all[$id] = $data;
-        update_option('dokmeplus_buttons', $all);
-
-        wp_redirect(admin_url('admin.php?page=dokmeplus&updated=1'));
-        exit;
-    }
-
-    // نمایش فرم
+    // نمایش فرم (تصویر/چاپ فرم)
     ?>
     <div class="wrap">
         <h1><?php echo $edit_id ? esc_html(dokmeplus_t('edit_button')) : esc_html(dokmeplus_t('add_button')); ?></h1>
-        <form method="post">
-            <?php wp_nonce_field('dokmeplus_save', '_dokmeplus_nonce'); ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php
+            // nonce و فیلدهای مورد نیاز برای پردازش ایمن
+            wp_nonce_field('dokmeplus_save', '_dokmeplus_nonce');
+            ?>
+            <input type="hidden" name="action" value="dokmeplus_save_button">
+            <input type="hidden" name="edit_id" value="<?php echo esc_attr($edit_id ?? ''); ?>">
             <table class="form-table">
                 <tr><th><?php echo esc_html(dokmeplus_t('label_title')); ?></th><td><input name="title" value="<?php echo esc_attr($edit['title'] ?? '') ?>" required></td></tr>
                 <tr><th><?php echo esc_html(dokmeplus_t('label_text')); ?></th><td><input name="text" value="<?php echo esc_attr($edit['text'] ?? '') ?>"></td></tr>
@@ -430,6 +427,62 @@ function dokmeplus_form_page() {
     </script>
     <?php
 }
+
+/* ---------------------------
+  پردازش ذخیره فرم (امن) — از طریق admin_post
+---------------------------- */
+add_action('admin_post_dokmeplus_save_button', function() {
+    if ( ! current_user_can('manage_options') ) wp_die('Access denied');
+
+    // nonce و ارزیابی
+    if ( ! isset($_POST['_dokmeplus_nonce']) || ! wp_verify_nonce( wp_unslash($_POST['_dokmeplus_nonce']), 'dokmeplus_save' ) ) {
+        wp_die('Invalid nonce');
+    }
+
+    $all = get_option('dokmeplus_buttons', []);
+    $edit_id = isset($_POST['edit_id']) ? sanitize_text_field($_POST['edit_id']) : '';
+
+    // محدودیت ساخت بدون لایسنس
+    $is_valid = dokmeplus_is_license_valid();
+    $count = is_array($all) ? count($all) : 0;
+    $is_new = empty($edit_id);
+    if ( $is_new && ! $is_valid && $count >= 3 ) {
+        wp_safe_redirect(admin_url('admin.php?page=dokmeplus&blocked=1'));
+        exit;
+    }
+
+    // داده‌ها را sanitize کن و ذخیره کن
+    $data = [
+        'title' => sanitize_text_field($_POST['title'] ?? ''),
+        'text'  => sanitize_text_field($_POST['text'] ?? ''),
+        'color' => sanitize_text_field($_POST['color'] ?? '#0073aa'),
+        'size'  => intval($_POST['size'] ?? 16),
+        'action'=> sanitize_text_field($_POST['action'] ?? 'link'),
+        'link'  => esc_url_raw($_POST['link'] ?? ''),
+        'copy_text' => sanitize_text_field($_POST['copy_text'] ?? ''),
+        'send_text' => sanitize_text_field($_POST['send_text'] ?? ''),
+        'call_number'=> sanitize_text_field($_POST['call_number'] ?? ''),
+        'sms_number' => sanitize_text_field($_POST['sms_number'] ?? ''),
+        'sms_message'=> sanitize_textarea_field($_POST['sms_message'] ?? ''),
+    ];
+
+    // تولید ID امن: اگر edit_id موجود باشد از آن استفاده کن، وگرنه یک uuid/uniqid جدید بساز
+    if ( ! empty($edit_id) ) {
+        $id = $edit_id;
+    } else {
+        if ( function_exists('wp_generate_uuid4') ) {
+            $id = wp_generate_uuid4();
+        } else {
+            $id = uniqid('dok_', true);
+        }
+    }
+
+    $all[$id] = $data;
+    update_option('dokmeplus_buttons', $all);
+
+    wp_redirect(admin_url('admin.php?page=dokmeplus&updated=1'));
+    exit;
+});
 
 /* ---------------------------
   صفحه تنظیمات: زبان + لایسنس (با لینک خرید)
@@ -513,8 +566,6 @@ function dokmeplus_about_page() {
 
 /* ============================================================
    سیستم بروزرسانی خودکار از GitHub (hajirahimi-ir/dokmeplus)
-   — با استفاده از GitHub Releases (tag_name = نسخه جدید)
-   نکته: نسخه هدر افزونه باید با tag در GitHub همخوان باشد.
 ============================================================ */
 add_filter('pre_set_site_transient_update_plugins', 'dokmeplus_check_github_update');
 
@@ -595,4 +646,3 @@ function dokmeplus_plugins_api($result, $action, $args) {
 
     return $info;
 }
-
