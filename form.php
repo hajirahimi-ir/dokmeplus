@@ -1,115 +1,122 @@
-<?php
-global $wpdb;
-
-$table_name = $wpdb->prefix . 'dokmeplus';
-
-$id = isset($_GET['edit_id']) ? intval($_GET['edit_id']) : 0;
-$button = null;
-if ($id) {
-    $button = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = array(
-        'title'   => sanitize_text_field($_POST['title']),
-        'text'    => sanitize_text_field($_POST['text']),
-        'color'   => sanitize_hex_color($_POST['color']),
-        'size'    => intval($_POST['size']),
-        'action'  => sanitize_text_field($_POST['action']),
-        'link'    => esc_url_raw($_POST['link']),
-        'phone'   => sanitize_text_field($_POST['phone']),
-        'sms'     => sanitize_textarea_field($_POST['sms']),
-    );
-
-    if ($id) {
-        $wpdb->update($table_name, $data, array('id' => $id));
-    } else {
-        $wpdb->insert($table_name, $data);
-    }
-
-    echo '<div class="updated"><p>' . dokmeplus_t('saved_successfully') . '</p></div>';
-}
-?>
-
 <div class="wrap">
-    <h1><?php echo $id ? dokmeplus_t('edit_button') : dokmeplus_t('add_button'); ?></h1>
+    <h1><?php echo isset($_GET['edit_id']) ? dokmeplus_t('edit') : dokmeplus_t('add_button'); ?></h1>
+    <?php
+    $all = get_option('dokmeplus_buttons', []);
+    $edit_id = $_GET['edit_id'] ?? null;
+    $edit = $edit_id && isset($all[$edit_id]) ? $all[$edit_id] : [];
+    if ($_POST) {
+        $data = [
+            'title' => sanitize_text_field($_POST['title']),
+            'text' => sanitize_text_field($_POST['text']),
+            'color' => sanitize_text_field($_POST['color']),
+            'size' => intval($_POST['size']),
+            'action' => sanitize_text_field($_POST['action']),
+            'link' => esc_url_raw($_POST['link'] ?? ''),
+            'copy_text' => sanitize_text_field($_POST['copy_text'] ?? ''),
+            'send_text' => sanitize_text_field($_POST['send_text'] ?? ''),
+            'call_number' => sanitize_text_field($_POST['call_number'] ?? ''),
+            'sms_number' => sanitize_text_field($_POST['sms_number'] ?? ''),
+            'sms_message' => sanitize_textarea_field($_POST['sms_message'] ?? ''),
+        ];
+        $id = $edit_id ?: time();
+        $all[$id] = $data;
+        update_option('dokmeplus_buttons', $all);
+        echo '<div class="updated"><p>' . dokmeplus_t('save') . '.</p></div>';
+        $edit = $data;
+    }
+    ?>
     <form method="post">
         <table class="form-table">
-            <tr>
-                <th><label for="title"><?php echo dokmeplus_t('title'); ?></label></th>
-                <td><input name="title" type="text" value="<?php echo esc_attr($button->title ?? ''); ?>" class="regular-text"></td>
-            </tr>
-            <tr>
-                <th><label for="text"><?php echo dokmeplus_t('button_text'); ?></label></th>
-                <td><input name="text" type="text" value="<?php echo esc_attr($button->text ?? ''); ?>" class="regular-text"></td>
-            </tr>
-            <tr>
-                <th><label for="color"><?php echo dokmeplus_t('color'); ?></label></th>
-                <td><input name="color" type="color" value="<?php echo esc_attr($button->color ?? '#000000'); ?>"></td>
-            </tr>
-            <tr>
-                <th><label for="size"><?php echo dokmeplus_t('font_size'); ?> (px)</label></th>
-                <td><input name="size" type="number" value="<?php echo esc_attr($button->size ?? 16); ?>"></td>
-            </tr>
-            <tr>
-                <th><label for="action"><?php echo dokmeplus_t('action'); ?></label></th>
+            <tr><th><?php echo dokmeplus_t('button_title'); ?></th><td><input name="title" value="<?php echo esc_attr($edit['title'] ?? '') ?>" required></td></tr>
+            <tr><th><?php echo dokmeplus_t('button_text'); ?></th><td><input name="text" value="<?php echo esc_attr($edit['text'] ?? '') ?>"></td></tr>
+            <tr><th><?php echo dokmeplus_t('color'); ?></th><td><input type="color" name="color" value="<?php echo esc_attr($edit['color'] ?? '#0073aa') ?>"></td></tr>
+            <tr><th><?php echo dokmeplus_t('font_size'); ?></th><td><input type="number" name="size" value="<?php echo esc_attr($edit['size'] ?? 16) ?>"></td></tr>
+            <tr><th><?php echo dokmeplus_t('action'); ?></th><td>
+                <select name="action" onchange="toggleFields(this.value)">
+                    <option value="link" <?php selected($edit['action'] ?? '', 'link') ?>><?php echo dokmeplus_t('link'); ?></option>
+                    <option value="copy" <?php selected($edit['action'] ?? '', 'copy') ?>><?php echo dokmeplus_t('copy'); ?></option>
+                    <option value="send" <?php selected($edit['action'] ?? '', 'send') ?>><?php echo dokmeplus_t('send'); ?></option>
+                    <option value="call" <?php selected($edit['action'] ?? '', 'call') ?>><?php echo dokmeplus_t('call'); ?></option>
+                    <option value="sms" <?php selected($edit['action'] ?? '', 'sms') ?>><?php echo dokmeplus_t('sms'); ?></option>
+                </select></td></tr>
+            <tr id="row_link"><th><?php echo dokmeplus_t('link_field'); ?></th><td><input name="link" value="<?php echo esc_attr($edit['link'] ?? '') ?>"></td></tr>
+            <tr id="row_copy"><th><?php echo dokmeplus_t('copy_text_field'); ?></th><td><input name="copy_text" value="<?php echo esc_attr($edit['copy_text'] ?? '') ?>"></td></tr>
+            <tr id="row_send"><th><?php echo dokmeplus_t('send_text_field'); ?></th><td><input name="send_text" value="<?php echo esc_attr($edit['send_text'] ?? '') ?>"></td></tr>
+            <tr id="row_call"><th><?php echo dokmeplus_t('call_number_field'); ?></th><td><input name="call_number" value="<?php echo esc_attr($edit['call_number'] ?? '') ?>"></td></tr>
+            <tr id="row_sms">
+                <th><?php echo dokmeplus_t('sms_number_field'); ?></th>
                 <td>
-                    <select name="action">
-                        <option value="link" <?php selected($button->action ?? '', 'link'); ?>><?php echo dokmeplus_t('link'); ?></option>
-                        <option value="call" <?php selected($button->action ?? '', 'call'); ?>><?php echo dokmeplus_t('call'); ?></option>
-                        <option value="sms" <?php selected($button->action ?? '', 'sms'); ?>><?php echo dokmeplus_t('sms'); ?></option>
-                    </select>
+                    <input name="sms_number" placeholder="<?php echo dokmeplus_t('sms_number_field'); ?>" value="<?php echo esc_attr($edit['sms_number'] ?? '') ?>"><br>
+                    <textarea name="sms_message" placeholder="<?php echo dokmeplus_t('sms_message_field'); ?>"><?php echo esc_textarea($edit['sms_message'] ?? '') ?></textarea>
                 </td>
-            </tr>
-            <tr>
-                <th><label for="link"><?php echo dokmeplus_t('link'); ?></label></th>
-                <td><input name="link" type="text" value="<?php echo esc_attr($button->link ?? ''); ?>" class="regular-text"></td>
-            </tr>
-            <tr>
-                <th><label for="phone"><?php echo dokmeplus_t('phone'); ?></label></th>
-                <td><input name="phone" type="text" value="<?php echo esc_attr($button->phone ?? ''); ?>" class="regular-text"></td>
-            </tr>
-            <tr>
-                <th><label for="sms"><?php echo dokmeplus_t('sms_text'); ?></label></th>
-                <td><textarea name="sms" class="large-text" rows="3"><?php echo esc_textarea($button->sms ?? ''); ?></textarea></td>
             </tr>
         </table>
 
-        <p class="submit">
-            <button type="submit" class="button button-primary"><?php echo dokmeplus_t('save'); ?></button>
-        </p>
-    </form>
+        <!-- پیش‌نمایش زنده -->
+        <h2><?php echo dokmeplus_t('preview'); ?></h2>
+        <div id="dokmeplus_preview_wrapper" style="padding:20px; background:#f9f9f9; border:1px solid #ddd; margin:15px 0;">
+            <a id="dokmeplus_preview" href="#" target="_blank" 
+               style="display:inline-block; padding:10px 20px; border-radius:5px; text-decoration:none; background:#0073aa; color:#fff; font-size:16px;">
+                <?php echo dokmeplus_t('button_text'); ?>
+            </a>
+        </div>
 
-    <!-- پیش‌نمایش زنده دکمه -->
-    <h2><?php echo dokmeplus_t('preview'); ?></h2>
-    <div id="dokmeplus_preview_wrapper" style="padding:20px; background:#f9f9f9; border:1px solid #ddd; margin-top:15px;">
-        <a id="dokmeplus_preview" href="#" target="_blank" 
-           style="display:inline-block; padding:10px 20px; border-radius:5px; text-decoration:none; background:#000; color:#fff;">
-            <?php echo dokmeplus_t('button_text'); ?>
-        </a>
-    </div>
+        <?php submit_button(); ?>
+    </form>
 </div>
 
 <script>
+function toggleFields(val) {
+    document.getElementById('row_link').style.display = val === 'link' ? '' : 'none';
+    document.getElementById('row_copy').style.display = val === 'copy' ? '' : 'none';
+    document.getElementById('row_send').style.display = val === 'send' ? '' : 'none';
+    document.getElementById('row_call').style.display = val === 'call' ? '' : 'none';
+    document.getElementById('row_sms').style.display = val === 'sms' ? '' : 'none';
+}
+document.addEventListener('DOMContentLoaded', function() {
+    toggleFields(document.querySelector('[name=action]').value);
+    updatePreview();
+});
+
 function updatePreview() {
     var btn = document.getElementById('dokmeplus_preview');
     var text = document.querySelector('[name=text]').value;
     var color = document.querySelector('[name=color]').value;
     var size = document.querySelector('[name=size]').value + 'px';
-    var link = document.querySelector('[name=link]').value;
+    var action = document.querySelector('[name=action]').value;
 
+    var link = document.querySelector('[name=link]').value;
+    var copy = document.querySelector('[name=copy_text]').value;
+    var send = document.querySelector('[name=send_text]').value;
+    var call = document.querySelector('[name=call_number]').value;
+    var sms_number = document.querySelector('[name=sms_number]').value;
+    var sms_message = document.querySelector('[name=sms_message]').value;
+
+    // متن و ظاهر
     btn.textContent = text || '<?php echo dokmeplus_t('button_text'); ?>';
     btn.style.backgroundColor = color;
     btn.style.fontSize = size;
-    btn.href = link ? link : '#';
+
+    // عملکرد
+    if (action === 'link' && link) {
+        btn.href = link;
+    } else if (action === 'call' && call) {
+        btn.href = 'tel:' + call;
+    } else if (action === 'sms' && sms_number) {
+        btn.href = 'sms:' + sms_number + (sms_message ? '?body=' + encodeURIComponent(sms_message) : '');
+    } else if (action === 'copy' && copy) {
+        btn.href = '#'; // فقط نمایش
+    } else if (action === 'send' && send) {
+        btn.href = '#'; // فقط نمایش
+    } else {
+        btn.href = '#';
+    }
 }
 
-// وقتی ورودی‌ها تغییر کنن، پیش‌نمایش آپدیت بشه
-document.querySelectorAll('[name=text],[name=color],[name=size],[name=link]')
+// اتصال تغییرات
+document.querySelectorAll('[name=text],[name=color],[name=size],[name=link],[name=copy_text],[name=send_text],[name=call_number],[name=sms_number],[name=sms_message],[name=action]')
     .forEach(function(el){
         el.addEventListener('input', updatePreview);
+        el.addEventListener('change', updatePreview);
     });
-
-// بارگذاری اولیه
-document.addEventListener('DOMContentLoaded', updatePreview);
 </script>
