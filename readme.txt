@@ -4,7 +4,7 @@ Donate link: https://hajirahimi.ir
 Tags: button, shortcode, custom button, share, sms, call
 Requires at least: 5.0
 Tested up to: 6.8
-Stable tag: 1.8
+Stable tag: 1.11.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,3 +31,4 @@ Dokme Plus is a lightweight WordPress plugin that lets you create custom buttons
 **Shortcode Example:**
 ```html
 [dokmeplus id="123456789"]
+
