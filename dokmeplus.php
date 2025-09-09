@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Dokme Plus
  * Description: افزونه مدیریت دکمه‌های سفارشی با پیش‌نمایش زنده.
- * Version: 1.0.0
+ * Version: 1.11.15
  * Author: شما
  */
 
@@ -167,3 +167,4 @@ function dokmeplus_t($key) {
 
     return $translations[$key] ?? $key;
 }
+
