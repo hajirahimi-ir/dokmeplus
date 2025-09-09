@@ -1,15 +1,11 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-// این فایل مستقل است و فرم افزودن/ویرایش + پیش‌نمایش زنده را نمایش می‌دهد.
-// فرض شده نام فیلدها مطابق کد اصلی شماست: title,text,color,size,action,link,copy_text,send_text,call_number,sms_number,sms_message
-
-// بارگذاری داده‌ها
 $all = get_option('dokmeplus_buttons', []);
 $edit_id = isset($_GET['edit_id']) ? sanitize_text_field($_GET['edit_id']) : '';
 $edit = ($edit_id && isset($all[$edit_id])) ? $all[$edit_id] : [];
 
-// پردازش ارسال فرم (اگر ارسال شد)
+// پردازش ارسال فرم
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options')) {
 
     if ( ! isset($_POST['_dokmeplus_nonce']) || ! wp_verify_nonce( wp_unslash($_POST['_dokmeplus_nonce']), 'dokmeplus_save' ) ) {
@@ -30,25 +26,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
         'sms_message'  => sanitize_textarea_field($_POST['sms_message'] ?? ''),
     ];
 
-    // تولید شناسه امن (حفظ رفتار قبلی با بهبود)
     if ( ! empty($edit_id) ) {
         $id = $edit_id;
     } else {
-        if ( function_exists('wp_generate_uuid4') ) {
-            $id = wp_generate_uuid4();
-        } else {
-            $id = uniqid('dok_', true);
-        }
+        $id = function_exists('wp_generate_uuid4') ? wp_generate_uuid4() : uniqid('dok_', true);
     }
 
     $all[$id] = $data;
     update_option('dokmeplus_buttons', $all);
 
-    // مقدار ویرایشی را بروزرسانی کن تا فرم پس از ذخیره مقدار جدید را نشان دهد
     $edit_id = $id;
     $edit = $all[$id];
 
-    // نمایش اعلامیه موفقیت (یا می‌توان wp_redirect کرد)
     echo '<div class="updated"><p>' . esc_html( dokmeplus_t('saved') ?? 'Saved.' ) . '</p></div>';
 }
 ?>
@@ -122,27 +111,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
             </tr>
         </table>
 
-        <!-- ===== پیش‌نمایش زنده ===== -->
-        <h2><?php echo esc_html__('Preview', 'dokmeplus'); ?></h2>
-        <div id="dokmeplus_preview_wrapper" style="padding:20px; background:#f9f9f9; border:1px solid #ddd; margin:15px 0;">
-            <a id="dokmeplus_preview" href="#" target="_blank"
-               style="display:inline-block; padding:10px 20px; border-radius:5px; text-decoration:none; background:<?php echo esc_attr($edit['color'] ?? '#0073aa'); ?>; color:#fff; font-size:<?php echo intval($edit['size'] ?? 16); ?>px;">
-                <?php echo esc_html( $edit['text'] ?? dokmeplus_t('label_text') ); ?>
-            </a>
-        </div>
+        <div class="form-actions">
+            <?php submit_button('ذخیره تغییرات'); ?>
 
-        <?php submit_button(); ?>
+            <?php if ( !empty($edit_id) ) : ?>
+                <a href="<?php echo esc_url( plugin_dir_url(__FILE__) . 'live.php?id=' . urlencode($edit_id) ); ?>" 
+                   class="button-secondary" target="_blank" style="margin-left:10px;">
+                   پیش‌نمایش دکمه
+                </a>
+            <?php endif; ?>
+        </div>
     </form>
 </div>
 
 <script>
 (function(){
-    // helper to safely get element value
-    function val(selector){
-        var el = document.querySelector(selector);
-        return el ? el.value : '';
-    }
-
     window.toggleFields = function(action){
         var rows = ['row_link','row_copy','row_send','row_call','row_sms'];
         rows.forEach(function(r){ var el = document.getElementById(r); if(el) el.style.display = 'none'; });
@@ -150,71 +133,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
         if (target) target.style.display = 'table-row';
     };
 
-    function updatePreview(){
-        var btn = document.getElementById('dokmeplus_preview');
-        if (!btn) return;
-
-        var text = val('[name=text]');
-        var color = val('[name=color]') || '#0073aa';
-        var size = val('[name=size]') || '16';
-        var action = val('[name=action]') || 'link';
-
-        var link = val('[name=link]');
-        var copy = val('[name=copy_text]');
-        var send = val('[name=send_text]');
-        var call = val('[name=call_number]');
-        var sms_number = val('[name=sms_number]');
-        var sms_message = val('[name=sms_message]');
-
-        btn.textContent = text || '<?php echo esc_js( dokmeplus_t('label_text') ); ?>';
-        btn.style.backgroundColor = color;
-        btn.style.fontSize = parseInt(size,10) + 'px';
-
-        if (action === 'link' && link) {
-            btn.setAttribute('href', link);
-            btn.removeAttribute('onclick');
-            btn.setAttribute('target','_blank');
-        } else if (action === 'call' && call) {
-            btn.setAttribute('href', 'tel:' + call);
-            btn.removeAttribute('onclick');
-            btn.removeAttribute('target');
-        } else if (action === 'sms' && sms_number) {
-            var href = 'sms:' + sms_number;
-            if (sms_message) href += '?body=' + encodeURIComponent(sms_message);
-            btn.setAttribute('href', href);
-            btn.removeAttribute('onclick');
-            btn.removeAttribute('target');
-        } else if (action === 'copy' && copy) {
-            btn.setAttribute('href', '#');
-            btn.removeAttribute('target');
-            // اضافه کردن رفتار copy در پیش‌نمایش
-            btn.onclick = function(e){ e.preventDefault(); try{ navigator.clipboard.writeText(copy); alert('<?php echo esc_js( dokmeplus_t('saved') ); ?>'); }catch(err){ alert('<?php echo esc_js( dokmeplus_t('license_error') ); ?>'); } };
-        } else if (action === 'send' && send) {
-            btn.setAttribute('href', '#');
-            btn.removeAttribute('target');
-            btn.onclick = function(e){ e.preventDefault(); if(navigator.share){ navigator.share({text: send}); } else { alert('<?php echo esc_js( dokmeplus_t('license_error') ); ?>'); } };
-        } else {
-            btn.setAttribute('href', '#');
-            btn.removeAttribute('onclick');
-            btn.setAttribute('target','_blank');
-        }
-    }
-
     document.addEventListener('DOMContentLoaded', function(){
-        // set initial visibility for action-dependent fields
         var currentActionEl = document.querySelector('[name=action]');
         var currentAction = currentActionEl ? currentActionEl.value : 'link';
         toggleFields(currentAction);
-
-        // attach listeners
-        var selectors = '[name=text],[name=color],[name=size],[name=link],[name=copy_text],[name=send_text],[name=call_number],[name=sms_number],[name=sms_message],[name=action]';
-        document.querySelectorAll(selectors).forEach(function(el){
-            el.addEventListener('input', updatePreview);
-            el.addEventListener('change', updatePreview);
-        });
-
-        // initial preview update
-        updatePreview();
     });
 })();
 </script>
