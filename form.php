@@ -1,11 +1,12 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// بارگذاری داده‌ها
 $all = get_option('dokmeplus_buttons', []);
 $edit_id = isset($_GET['edit_id']) ? sanitize_text_field($_GET['edit_id']) : '';
 $edit = ($edit_id && isset($all[$edit_id])) ? $all[$edit_id] : [];
 
-// پردازش ارسال فرم
+// پردازش ارسال فرم (ذخیره‌سازی)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options')) {
 
     if ( ! isset($_POST['_dokmeplus_nonce']) || ! wp_verify_nonce( wp_unslash($_POST['_dokmeplus_nonce']), 'dokmeplus_save' ) ) {
@@ -26,7 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
         'sms_message'  => sanitize_textarea_field($_POST['sms_message'] ?? ''),
     ];
 
-    if ( ! empty($edit_id) ) {
+    // تولید یا بروزرسانی شناسه
+    if (!empty($edit_id)) {
         $id = $edit_id;
     } else {
         $id = function_exists('wp_generate_uuid4') ? wp_generate_uuid4() : uniqid('dok_', true);
@@ -111,16 +113,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
             </tr>
         </table>
 
-        <div class="form-actions">
-            <?php submit_button('ذخیره تغییرات'); ?>
+        <p class="submit">
+            <?php submit_button('ذخیره تغییرات', 'primary', 'submit', false); ?>
 
             <?php if ( !empty($edit_id) ) : ?>
-                <a href="<?php echo esc_url( plugin_dir_url(__FILE__) . 'live.php?id=' . urlencode($edit_id) ); ?>" 
+                <a href="<?php echo admin_url('admin.php?page=dokmeplus_live&id=' . urlencode($edit_id)); ?>" 
                    class="button-secondary" target="_blank" style="margin-left:10px;">
                    پیش‌نمایش دکمه
                 </a>
             <?php endif; ?>
-        </div>
+        </p>
     </form>
 </div>
 
