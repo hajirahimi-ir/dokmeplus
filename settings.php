@@ -20,6 +20,12 @@ $license = get_option('dokmeplus_license', '');
                 <td>
                     <input type="text" id="license_key" name="license_key" value="<?php echo esc_attr($license); ?>" class="regular-text" />
                     <p class="description">Enter your valid license key to unlock full features.</p>
+                    <p class="description">
+                        Need a license? 
+                        <a href="https://hamtamehr.ir/shop/kf-j59n/lo55hg22" target="_blank">
+                            Purchase a license here
+                        </a>.
+                    </p>
                 </td>
             </tr>
         </table>
