@@ -1,12 +1,12 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-// Load data
+// Load saved data
 $all = get_option('dokmeplus_buttons', []);
 $edit_id = isset($_GET['edit_id']) ? sanitize_text_field($_GET['edit_id']) : '';
 $edit = ($edit_id && isset($all[$edit_id])) ? $all[$edit_id] : [];
 
-// Process form submission (save data)
+// Handle form submission (save data)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options')) {
 
     if ( ! isset($_POST['_dokmeplus_nonce']) || ! wp_verify_nonce( wp_unslash($_POST['_dokmeplus_nonce']), 'dokmeplus_save' ) ) {
@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
             <?php if ( !empty($edit_id) ) : ?>
                 <a href="<?php echo admin_url('admin.php?page=dokmeplus_live&id=' . urlencode($edit_id)); ?>" 
                    class="button-secondary" target="_blank" style="margin-left:10px;">
-                   Button Preview
+                   Live Preview
                 </a>
             <?php endif; ?>
         </p>
