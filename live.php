@@ -5,19 +5,19 @@ $all = get_option('dokmeplus_buttons', []);
 $id = isset($_GET['id']) ? sanitize_text_field($_GET['id']) : '';
 
 if (!$id || !isset($all[$id])) {
-    wp_die('دکمه مورد نظر یافت نشد.');
+    wp_die('The requested button was not found.');
 }
 
 $btn = $all[$id];
 ?>
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>پیش نمایش دکمه</title>
+    <title>Button Preview</title>
     <style>
         body {
-            font-family: tahoma, sans-serif;
+            font-family: Arial, sans-serif;
             background: #f9f9f9;
             padding: 40px;
             text-align: center;
