@@ -12,11 +12,15 @@
  * Domain Path: /languages
  */
 
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
-if ( ! defined('ABSPATH') ) exit;
-
-// Fallback translation function (ensures older include files that use dokmeplus_t() won't fatal)
-if ( ! function_exists('dokmeplus_t') ) {
+/**
+ * Backward-compatible translation helper (fallback)
+ * If you prefer WP i18n, you can replace dokmeplus_t() with __()/esc_html__ etc.
+ */
+if ( ! function_exists( 'dokmeplus_t' ) ) {
     function dokmeplus_t( $key ) {
         $strings = [
             'menu_main'        => 'Dokme Plus',
@@ -62,25 +66,37 @@ if ( ! function_exists('dokmeplus_t') ) {
             'add_blocked'      => 'You can create up to 3 buttons without a valid license. Enter a license to create more.',
             'about_text'       => 'This plugin is made with ❤ by Hajirahimi',
         ];
-        return $strings[$key] ?? $key;
+        return $strings[ $key ] ?? $key;
     }
 }
 
+/* ---------------------------
+ * Constants & Defaults
+---------------------------- */
+if ( ! defined( 'DOKMEPLUS_GITHUB_API' ) ) {
+    define( 'DOKMEPLUS_GITHUB_API', 'https://api.github.com/repos/hajirahimi-ir/dokmeplus/releases/latest' );
+}
+if ( ! defined( 'DOKMEPLUS_LICENSE_API' ) ) {
+    define( 'DOKMEPLUS_LICENSE_API', 'https://hamtamehr.ir/wp-json/hamtamehr/v1/check-license' );
+}
+if ( ! defined( 'DOKMEPLUS_TRANSIENT_LICENSE' ) ) {
+    define( 'DOKMEPLUS_TRANSIENT_LICENSE', 'dokmeplus_license_check' );
+}
 
 /* ---------------------------
-  License API Settings
+ * Load textdomain (i18n)
 ---------------------------- */
-if ( ! defined('HAMTAMEHR_LICENSE_API') ) {
-    define( 'HAMTAMEHR_LICENSE_API', 'https://hamtamehr.ir/wp-json/hamtamehr/v1/check-license' );
-}
+add_action( 'plugins_loaded', function() {
+    load_plugin_textdomain( 'dokmeplus', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+});
 
 /* ---------------------------
  * Admin Menus
 ---------------------------- */
-add_action('admin_menu', function() {
+add_action( 'admin_menu', function() {
     add_menu_page(
-        'Dokme Plus',
-        'Dokme Plus',
+        dokmeplus_t('menu_main'),
+        dokmeplus_t('menu_main'),
         'manage_options',
         'dokmeplus',
         'dokmeplus_list_page',
@@ -90,8 +106,8 @@ add_action('admin_menu', function() {
 
     add_submenu_page(
         'dokmeplus',
-        'Add Button',
-        'Add Button',
+        dokmeplus_t('menu_add'),
+        dokmeplus_t('menu_add'),
         'manage_options',
         'dokmeplus_add',
         'dokmeplus_form_page'
@@ -99,8 +115,8 @@ add_action('admin_menu', function() {
 
     add_submenu_page(
         'dokmeplus',
-        'Settings',
-        'Settings',
+        dokmeplus_t('menu_settings'),
+        dokmeplus_t('menu_settings'),
         'manage_options',
         'dokmeplus_settings',
         'dokmeplus_settings_page'
@@ -108,7 +124,7 @@ add_action('admin_menu', function() {
 
     add_submenu_page(
         'dokmeplus',
-        'About Developer',
+        dokmeplus_t('menu_about'),
         'About',
         'manage_options',
         'dokmeplus_about',
@@ -129,280 +145,361 @@ add_action('admin_menu', function() {
 /* ---------------------------
  * GitHub Auto Update System
 ---------------------------- */
-add_action('init', function() {
-    if (is_admin()) {
+add_action( 'init', function() {
+    if ( is_admin() ) {
+        // instantiate updater
         new DokmePlus_GitHub_Updater();
     }
 });
 
 class DokmePlus_GitHub_Updater {
     private $plugin_file;
+    private $plugin_basename;
     private $github_api;
-    private $plugin_slug;
 
     public function __construct() {
-        $this->plugin_file = plugin_basename(__FILE__);
-        $this->plugin_slug = dirname($this->plugin_file);
-        $this->github_api  = 'https://api.github.com/repos/YOUR_GITHUB_USERNAME/YOUR_REPOSITORY/releases/latest';
+        $this->plugin_file     = __FILE__;
+        $this->plugin_basename = plugin_basename( $this->plugin_file ); // e.g. dokmeplus/dokmeplus.php
+        $this->github_api      = DOKMEPLUS_GITHUB_API;
 
-        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_update']);
-        add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
+        add_filter( 'pre_set_site_transient_update_plugins', [ $this, 'check_for_update' ] );
+        add_filter( 'plugins_api', [ $this, 'plugin_info' ], 10, 3 );
     }
 
-    // Check for update
-    public function check_for_update($transient) {
-        if (empty($transient->checked)) {
+    public function check_for_update( $transient ) {
+        if ( empty( $transient->checked ) ) {
             return $transient;
         }
 
-        $remote = wp_remote_get($this->github_api, [
-            'headers' => ['User-Agent' => 'WordPress']
-        ]);
+        // attempt remote request
+        $headers = [
+            'User-Agent' => 'DokmePlusUpdater/1.0; ' . get_bloginfo( 'url' ),
+        ];
 
-        if (!is_wp_error($remote) && isset($remote['response']['code']) && $remote['response']['code'] == 200) {
-            $data = json_decode(wp_remote_retrieve_body($remote));
-            if (isset($data->tag_name)) {
-                $plugin_data = get_plugin_data(__FILE__);
-                $current_version = $plugin_data['Version'];
-                $latest_version = ltrim($data->tag_name, 'v');
+        // Optional: use personal access token stored in option (admin can set it in settings)
+        $token = get_option( 'dokmeplus_github_token', '' );
+        if ( ! empty( $token ) ) {
+            $headers['Authorization'] = 'token ' . trim( $token );
+        }
 
-                if (version_compare($current_version, $latest_version, '<')) {
-                    $plugin = [
-                        'slug'        => $this->plugin_slug,
-                        'plugin'      => $this->plugin_file,
-                        'new_version' => $latest_version,
-                        'url'         => $data->html_url,
-                        'package'     => $data->zipball_url
-                    ];
-                    $transient->response[$this->plugin_file] = (object) $plugin;
-                }
+        $remote = wp_remote_get( $this->github_api, [
+            'headers' => $headers,
+            'timeout' => 15,
+        ] );
+
+        if ( is_wp_error( $remote ) ) {
+            error_log( '[DokmePlus] GitHub updater request failed: ' . $remote->get_error_message() );
+            return $transient;
+        }
+
+        $code = wp_remote_retrieve_response_code( $remote );
+        if ( $code !== 200 ) {
+            // possible rate limit or not found
+            error_log( "[DokmePlus] GitHub updater returned HTTP {$code}" );
+            return $transient;
+        }
+
+        $body = wp_remote_retrieve_body( $remote );
+        $data = json_decode( $body );
+        if ( empty( $data ) || empty( $data->tag_name ) ) {
+            error_log( '[DokmePlus] GitHub updater: invalid response body' );
+            return $transient;
+        }
+
+        $latest_version = ltrim( $data->tag_name, 'v' );
+
+        // read plugin header version
+        if ( ! function_exists( 'get_plugin_data' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        $plugin_data = get_plugin_data( $this->plugin_file );
+        $current_version = $plugin_data['Version'] ?? '0';
+
+        if ( version_compare( $current_version, $latest_version, '<' ) ) {
+            $package = $data->zipball_url ?? ( $data->tarball_url ?? '' );
+            if ( empty( $package ) ) {
+                error_log( '[DokmePlus] GitHub updater: no package URL' );
+                return $transient;
             }
+
+            $plugin = (object) [
+                'slug'        => dirname( $this->plugin_basename ),
+                'plugin'      => $this->plugin_basename,
+                'new_version' => $latest_version,
+                'url'         => $data->html_url ?? '',
+                'package'     => $package,
+            ];
+
+            $transient->response[ $this->plugin_basename ] = $plugin;
         }
 
         return $transient;
     }
 
-    // Display plugin info on update details screen
-    public function plugin_info($res, $action, $args) {
-        if ($action !== 'plugin_information' || $args->slug !== $this->plugin_slug) {
+    public function plugin_info( $res, $action, $args ) {
+        if ( 'plugin_information' !== $action || empty( $args->slug ) ) {
             return $res;
         }
 
-        $remote = wp_remote_get($this->github_api, [
-            'headers' => ['User-Agent' => 'WordPress']
-        ]);
-
-        if (!is_wp_error($remote) && isset($remote['response']['code']) && $remote['response']['code'] == 200) {
-            $data = json_decode(wp_remote_retrieve_body($remote));
-            $res = (object) [
-                'name'          => 'Dokme Plus',
-                'slug'          => $this->plugin_slug,
-                'version'       => ltrim($data->tag_name, 'v'),
-                'author'        => '<a href="https://hajirahimi.ir">Hajirahimi</a>',
-                'homepage'      => $data->html_url,
-                'sections'      => [
-                    'description' => $data->body
-                ],
-                'download_link' => $data->zipball_url,
-            ];
+        // compare slugs: WordPress passes the plugin file path (folder/plugin.php)
+        if ( $args->slug !== $this->plugin_basename && $args->slug !== dirname( $this->plugin_basename ) ) {
+            // not our plugin
+            return $res;
         }
+
+        $headers = [
+            'User-Agent' => 'DokmePlusUpdater/1.0; ' . get_bloginfo( 'url' ),
+        ];
+        $token = get_option( 'dokmeplus_github_token', '' );
+        if ( ! empty( $token ) ) {
+            $headers['Authorization'] = 'token ' . trim( $token );
+        }
+
+        $remote = wp_remote_get( $this->github_api, [
+            'headers' => $headers,
+            'timeout' => 15,
+        ] );
+
+        if ( is_wp_error( $remote ) ) {
+            return $res;
+        }
+
+        $code = wp_remote_retrieve_response_code( $remote );
+        if ( $code !== 200 ) {
+            return $res;
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $remote ) );
+        if ( empty( $data ) ) {
+            return $res;
+        }
+
+        // Build plugin info object for WP updater modal
+        $res = (object) [
+            'name'          => 'Dokme Plus',
+            'slug'          => dirname( $this->plugin_basename ),
+            'version'       => ltrim( $data->tag_name, 'v' ),
+            'author'        => '<a href="https://hajirahimi.ir">Hajirahimi</a>',
+            'homepage'      => $data->html_url ?? '',
+            'sections'      => [
+                'description' => $data->body ?? '',
+            ],
+            'download_link' => $data->zipball_url ?? '',
+        ];
 
         return $res;
     }
 }
 
-
 /* ---------------------------
- * License System
+ * License System (improved error handling)
 ---------------------------- */
-function dokmeplus_check_license_remote($license) {
-    if (empty($license)) {
-        return ['valid' => false, 'message' => 'Please enter a license key.'];
+function dokmeplus_check_license_remote( $license ) {
+    $license = trim( (string) $license );
+    if ( $license === '' ) {
+        return [ 'valid' => false, 'message' => dokmeplus_t( 'license_missing' ) ];
     }
 
-    $domain = sanitize_text_field($_SERVER['SERVER_NAME']);
-    $response = wp_remote_post(HAMTAMEHR_LICENSE_API, [
+    $domain = isset( $_SERVER['SERVER_NAME'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : get_site_url();
+    $response = wp_remote_post( DOKMEPLUS_LICENSE_API, [
         'timeout' => 15,
-        'body'    => ['license' => $license, 'domain' => $domain]
-    ]);
+        'body'    => [ 'license' => $license, 'domain' => $domain ],
+    ] );
 
-    if (is_wp_error($response)) {
-        return ['valid' => false, 'message' => 'License key is invalid.'];
+    if ( is_wp_error( $response ) ) {
+        error_log( '[DokmePlus] License API error: ' . $response->get_error_message() );
+        return [ 'valid' => false, 'message' => dokmeplus_t( 'license_error' ) ];
     }
 
-    $data = json_decode(wp_remote_retrieve_body($response), true);
+    $body = wp_remote_retrieve_body( $response );
+    $data = json_decode( $body, true );
+    if ( empty( $data ) || ! isset( $data['valid'] ) ) {
+        return [ 'valid' => false, 'message' => dokmeplus_t( 'license_invalid' ) ];
+    }
+
     return [
-        'valid'   => (bool)($data['valid'] ?? false),
-        'message' => sanitize_text_field($data['message'] ?? 'License key is invalid.')
+        'valid'   => (bool) $data['valid'],
+        'message' => sanitize_text_field( $data['message'] ?? dokmeplus_t( 'license_invalid' ) ),
     ];
 }
 
 function dokmeplus_is_license_valid() {
-    $cached = get_transient('dokmeplus_license_check');
-    if ($cached) {
+    $cached = get_transient( DOKMEPLUS_TRANSIENT_LICENSE );
+    if ( is_array( $cached ) && isset( $cached['valid'] ) ) {
         return (bool) $cached['valid'];
     }
-    $license = get_option('dokmeplus_license', '');
-    $check = dokmeplus_check_license_remote($license);
-    set_transient('dokmeplus_license_check', $check, 12 * HOUR_IN_SECONDS);
-    return (bool) $check['valid'];
+
+    $license = get_option( 'dokmeplus_license', '' );
+    $check = dokmeplus_check_license_remote( $license );
+    set_transient( DOKMEPLUS_TRANSIENT_LICENSE, $check, 12 * HOUR_IN_SECONDS );
+    return (bool) ( $check['valid'] ?? false );
 }
 
 /* ---------------------------
- * Keep plugin active after update
- * Tracks activation state & re-activates after plugin update
+ * Keep plugin active after update (robust)
 ---------------------------- */
-
-// Save plugin state when activated/deactivated (to restore after update)
+// store activation state on activation/deactivation
 function dokmeplus_track_activation( $network_wide = false ) {
+    // For single-site, update_option is fine; for multisite we still store option per-site.
     update_option( 'dokmeplus_should_be_active', true );
-    // Save whether it was network activated (for multisite)
     update_option( 'dokmeplus_should_be_network_active', is_multisite() ? (bool) $network_wide : false );
 }
-
 function dokmeplus_track_deactivation( $network_wide = false ) {
     update_option( 'dokmeplus_should_be_active', false );
     update_option( 'dokmeplus_should_be_network_active', false );
 }
-
-// Hooks to track activation/deactivation
 register_activation_hook( __FILE__, 'dokmeplus_track_activation' );
 register_deactivation_hook( __FILE__, 'dokmeplus_track_deactivation' );
 
-// After the WordPress upgrade process finishes, re-activate the plugin if it was active before the update
+// reactivate after core/plugin upgrader finishes
 add_action( 'upgrader_process_complete', 'dokmeplus_reactivate_after_update', 10, 2 );
-
 function dokmeplus_reactivate_after_update( $upgrader_object, $options ) {
-
-    // Only run on plugin updates
+    // only care about plugin updates
     if ( empty( $options['action'] ) || empty( $options['type'] ) ) {
         return;
     }
-    if ( $options['action'] !== 'update' || $options['type'] !== 'plugin' ) {
+    if ( 'update' !== $options['action'] || 'plugin' !== $options['type'] ) {
         return;
     }
-
     if ( empty( $options['plugins'] ) || ! is_array( $options['plugins'] ) ) {
         return;
     }
 
-    $plugin_basename = plugin_basename( __FILE__ ); // Example: dokmeplus/dokmeplus.php
-
-    // If our plugin is not in the list of updated plugins, do nothing
+    $plugin_basename = plugin_basename( __FILE__ );
     if ( ! in_array( $plugin_basename, $options['plugins'], true ) ) {
         return;
     }
 
-    // Read saved state
     $should_be_active  = get_option( 'dokmeplus_should_be_active', false );
     $should_be_network = get_option( 'dokmeplus_should_be_network_active', false );
 
-    // If the plugin was manually deactivated by the user before the update, don't reactivate it
     if ( ! $should_be_active ) {
         return;
     }
 
-    // Load required functions for activation
     if ( ! function_exists( 'activate_plugin' ) ) {
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
     }
 
-    // If this is a multisite and the plugin was network activated, reactivate it network-wide
+    // Reactivate network-wide if needed
     if ( is_multisite() && $should_be_network ) {
         if ( ! is_plugin_active_for_network( $plugin_basename ) ) {
             activate_plugin( $plugin_basename, '', true );
         }
     } else {
-        // Otherwise, just activate normally
         if ( ! is_plugin_active( $plugin_basename ) ) {
             activate_plugin( $plugin_basename );
         }
     }
 
-    // (Optional) Save timestamp of the last auto-reactivation for debugging purposes
+    // clean up stored flags (optional)
+    delete_option( 'dokmeplus_should_be_active' );
+    delete_option( 'dokmeplus_should_be_network_active' );
     update_option( 'dokmeplus_last_auto_reactivated', current_time( 'mysql' ) );
 }
 
-
 /* ---------------------------
- * Live Preview Page
----------------------------- */
-function dokmeplus_live_page() {
-    include plugin_dir_path(__FILE__) . 'live.php';
-}
-
-/* ---------------------------
- * Button List Page
+ * Admin Pages (includes with safety)
 ---------------------------- */
 function dokmeplus_list_page() {
-    include plugin_dir_path(__FILE__) . 'list.php';
+    $path = plugin_dir_path( __FILE__ ) . 'list.php';
+    if ( file_exists( $path ) ) {
+        include $path;
+    } else {
+        echo '<div class="notice notice-warning"><p>List page template not found.</p></div>';
+    }
 }
 
-/* ---------------------------
- * Add / Edit Button Page
----------------------------- */
 function dokmeplus_form_page() {
     // Free version limit: 3 buttons
-    $all = get_option('dokmeplus_buttons', []);
-    if (!dokmeplus_is_license_valid() && count($all) >= 3 && !isset($_GET['edit_id'])) {
-        wp_safe_redirect(admin_url('admin.php?page=dokmeplus&blocked=1'));
+    $all = get_option( 'dokmeplus_buttons', [] );
+    $edit_id = isset( $_GET['edit_id'] ) ? sanitize_text_field( wp_unslash( $_GET['edit_id'] ) ) : '';
+    if ( ! dokmeplus_is_license_valid() && count( $all ) >= 3 && '' === $edit_id ) {
+        wp_safe_redirect( admin_url( 'admin.php?page=dokmeplus&blocked=1' ) );
         exit;
     }
 
-    include plugin_dir_path(__FILE__) . 'form.php';
+    $path = plugin_dir_path( __FILE__ ) . 'form.php';
+    if ( file_exists( $path ) ) {
+        include $path;
+    } else {
+        echo '<div class="notice notice-warning"><p>Form page template not found.</p></div>';
+    }
 }
 
-/* ---------------------------
- * Settings Page
----------------------------- */
 function dokmeplus_settings_page() {
-    include plugin_dir_path(__FILE__) . 'settings.php';
+    $path = plugin_dir_path( __FILE__ ) . 'settings.php';
+    if ( file_exists( $path ) ) {
+        include $path;
+    } else {
+        echo '<div class="wrap"><h1>' . esc_html( dokmeplus_t( 'settings_title' ) ) . '</h1>';
+        echo '<p>Settings page template not found.</p></div>';
+    }
 }
 
-/* ---------------------------
- * About Page
----------------------------- */
 function dokmeplus_about_page() {
     echo '<div class="wrap"><h1>About Developer</h1>';
     echo '<p>This plugin is created with ❤ by <a href="https://hajirahimi.ir" target="_blank">Hajirahimi</a>.</p></div>';
 }
 
+function dokmeplus_live_page() {
+    $path = plugin_dir_path( __FILE__ ) . 'live.php';
+    if ( file_exists( $path ) ) {
+        include $path;
+    } else {
+        echo '<div class="notice notice-warning"><p>Live preview template not found.</p></div>';
+    }
+}
+
 /* ---------------------------
- * Shortcode for Displaying Buttons
+ * Shortcode for Displaying Buttons (secure)
 ---------------------------- */
-add_shortcode('dokmeplus', function($atts) {
-    $atts = shortcode_atts(['id' => ''], $atts);
-    $all = get_option('dokmeplus_buttons', []);
-    $id = sanitize_text_field($atts['id']);
+add_shortcode( 'dokmeplus', function( $atts ) {
+    $atts = shortcode_atts( [ 'id' => '' ], $atts, 'dokmeplus' );
+    $all  = get_option( 'dokmeplus_buttons', [] );
+    $id   = sanitize_text_field( $atts['id'] );
 
-    if (!$id || !isset($all[$id])) return '';
+    if ( ! $id || ! isset( $all[ $id ] ) ) {
+        return '';
+    }
 
-    $btn = $all[$id];
+    $btn = $all[ $id ];
+
+    // sanitize values and apply limits
+    $color = isset( $btn['color'] ) ? sanitize_hex_color( $btn['color'] ) : '#0073aa';
+    if ( ! $color ) {
+        $color = '#0073aa';
+    }
+    $size = isset( $btn['size'] ) ? intval( $btn['size'] ) : 16;
+    $size = max( 10, min( 48, $size ) ); // limit font size to reasonable range
+
     $style = sprintf(
         'background:%s; font-size:%dpx; color:#fff; padding:10px 20px; border-radius:5px; text-decoration:none;',
-        esc_attr($btn['color']),
-        intval($btn['size'])
+        esc_attr( $color ),
+        intval( $size )
     );
 
-    switch ($btn['action']) {
+    switch ( $btn['action'] ?? 'link' ) {
         case 'call':
-            $href = 'tel:' . esc_attr($btn['call_number']);
+            $href = 'tel:' . rawurlencode( sanitize_text_field( $btn['call_number'] ?? '' ) );
             break;
         case 'sms':
-            $href = 'sms:' . esc_attr($btn['sms_number']);
-            if (!empty($btn['sms_message'])) {
-                $href .= '?body=' . urlencode($btn['sms_message']);
+            $number = rawurlencode( sanitize_text_field( $btn['sms_number'] ?? '' ) );
+            $href = 'sms:' . $number;
+            if ( ! empty( $btn['sms_message'] ) ) {
+                $href .= '?body=' . rawurlencode( $btn['sms_message'] );
             }
             break;
         default:
-            $href = !empty($btn['link']) ? esc_url($btn['link']) : '#';
+            $href = ! empty( $btn['link'] ) ? esc_url( $btn['link'] ) : '#';
             break;
     }
 
-    return sprintf('<a href="%s" style="%s" target="_blank">%s</a>',
-        esc_url($href),
-        esc_attr($style),
-        esc_html($btn['text'])
-    );
-});
+    $text = esc_html( $btn['text'] ?? $btn['title'] ?? '' );
 
+    return sprintf( '<a href="%s" style="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+        esc_url( $href ),
+        esc_attr( $style ),
+        $text
+    );
+} );
