@@ -414,11 +414,21 @@ function dokmeplus_form_page() {
     // Free version limit: 3 buttons
     $all = get_option( 'dokmeplus_buttons', [] );
     $edit_id = isset( $_GET['edit_id'] ) ? sanitize_text_field( wp_unslash( $_GET['edit_id'] ) ) : '';
+
+    // If license is not valid and the user already has 3 or more buttons and is trying to add a new one
     if ( ! dokmeplus_is_license_valid() && count( $all ) >= 3 && '' === $edit_id ) {
-        wp_safe_redirect( admin_url( 'admin.php?page=dokmeplus&blocked=1' ) );
-        exit;
+
+        // Display warning instead of redirect
+        echo '<div class="notice notice-error is-dismissible">';
+        echo '<p><strong>You can only create up to 3 buttons in the free version.</strong></p>';
+        echo '<p>To create more buttons, you need to purchase and activate a valid license.</p>';
+        echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=dokmeplus_settings' ) ) . '">Go to Settings & Buy License</a></p>';
+        echo '</div>';
+
+        return; // Stop further execution
     }
 
+    // Load the button form
     $path = plugin_dir_path( __FILE__ ) . 'form.php';
     if ( file_exists( $path ) ) {
         include $path;
@@ -426,6 +436,7 @@ function dokmeplus_form_page() {
         echo '<div class="notice notice-warning"><p>Form page template not found.</p></div>';
     }
 }
+
 
 function dokmeplus_settings_page() {
     $path = plugin_dir_path( __FILE__ ) . 'settings.php';
