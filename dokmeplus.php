@@ -1,104 +1,166 @@
 <?php
 /**
  * Plugin Name: Dokme Plus
- * Description: افزونه مدیریت دکمه‌های سفارشی با پیش‌نمایش زنده.
- * Version: 1.11.15
- * Author: شما
+ * Plugin URI: https://hamtamehr.ir/shop/kf-j59n/lo55hg22
+ * Description: Manage custom buttons with live preview and license system. Free version supports up to 3 buttons.
+ * Version: 1.12.0
+ * Author: Hajirahimi
+ * Author URI: https://hajirahimi.ir
+ * License: GPLv2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: dokmeplus
+ * Domain Path: /languages
  */
 
-if ( ! defined('ABSPATH') ) {
-    exit; // جلوگیری از دسترسی مستقیم
+if ( ! defined('ABSPATH') ) exit;
+
+/* ---------------------------
+  License API Settings
+---------------------------- */
+if ( ! defined('HAMTAMEHR_LICENSE_API') ) {
+    define( 'HAMTAMEHR_LICENSE_API', 'https://hamtamehr.ir/wp-json/hamtamehr/v1/check-license' );
 }
 
-/* ------------------------------
- * بارگذاری منوهای مدیریتی افزونه
- * ------------------------------ */
-add_action('admin_menu', 'dokmeplus_register_admin_menu');
-function dokmeplus_register_admin_menu() {
-
-    // منوی اصلی
+/* ---------------------------
+ * Admin Menus
+---------------------------- */
+add_action('admin_menu', function() {
     add_menu_page(
-        'دکمه پلاس',          // عنوان صفحه
-        'دکمه پلاس',          // عنوان منو
-        'manage_options',     // سطح دسترسی
-        'dokmeplus',          // slug
-        'dokmeplus_list_page',// کال‌بک
-        'dashicons-screenoptions', // آیکون
-        26                     // موقعیت منو
+        'Dokme Plus',
+        'Dokme Plus',
+        'manage_options',
+        'dokmeplus',
+        'dokmeplus_list_page',
+        'dashicons-screenoptions',
+        26
     );
 
-    // زیرمنو - افزودن دکمه
     add_submenu_page(
         'dokmeplus',
-        'افزودن دکمه',
-        'افزودن دکمه',
+        'Add Button',
+        'Add Button',
         'manage_options',
         'dokmeplus_add',
-        'dokmeplus_add_page'
+        'dokmeplus_form_page'
     );
 
-    // زیرمنو مخفی برای پیش‌نمایش دکمه
+    add_submenu_page(
+        'dokmeplus',
+        'Settings',
+        'Settings',
+        'manage_options',
+        'dokmeplus_settings',
+        'dokmeplus_settings_page'
+    );
+
+    add_submenu_page(
+        'dokmeplus',
+        'About Developer',
+        'About',
+        'manage_options',
+        'dokmeplus_about',
+        'dokmeplus_about_page'
+    );
+
+    // Hidden submenu for live preview
     add_submenu_page(
         null,
-        'پیش‌نمایش دکمه',
-        'پیش‌نمایش دکمه',
+        'Live Preview',
+        'Live Preview',
         'manage_options',
         'dokmeplus_live',
         'dokmeplus_live_page'
     );
-}
+});
 
-/* ------------------------------
- * صفحه لیست دکمه‌ها
- * ------------------------------ */
-function dokmeplus_list_page() {
-    // حذف دکمه (در صورت ارسال پارامتر delete_id)
-    if (isset($_GET['delete_id'])) {
-        $delete_id = sanitize_text_field($_GET['delete_id']);
-        check_admin_referer('dokmeplus_delete_' . $delete_id);
-
-        $all = get_option('dokmeplus_buttons', []);
-        if (isset($all[$delete_id])) {
-            unset($all[$delete_id]);
-            update_option('dokmeplus_buttons', $all);
-
-            echo '<div class="updated"><p>دکمه با موفقیت حذف شد.</p></div>';
-        }
+/* ---------------------------
+ * License System
+---------------------------- */
+function dokmeplus_check_license_remote($license) {
+    if (empty($license)) {
+        return ['valid' => false, 'message' => 'Please enter a license key.'];
     }
 
-    include plugin_dir_path(__FILE__) . 'list.php';
+    $domain = sanitize_text_field($_SERVER['SERVER_NAME']);
+    $response = wp_remote_post(HAMTAMEHR_LICENSE_API, [
+        'timeout' => 15,
+        'body'    => ['license' => $license, 'domain' => $domain]
+    ]);
+
+    if (is_wp_error($response)) {
+        return ['valid' => false, 'message' => 'License key is invalid.'];
+    }
+
+    $data = json_decode(wp_remote_retrieve_body($response), true);
+    return [
+        'valid'   => (bool)($data['valid'] ?? false),
+        'message' => sanitize_text_field($data['message'] ?? 'License key is invalid.')
+    ];
 }
 
-/* ------------------------------
- * صفحه افزودن یا ویرایش دکمه
- * ------------------------------ */
-function dokmeplus_add_page() {
-    include plugin_dir_path(__FILE__) . 'form.php';
+function dokmeplus_is_license_valid() {
+    $cached = get_transient('dokmeplus_license_check');
+    if ($cached) {
+        return (bool) $cached['valid'];
+    }
+    $license = get_option('dokmeplus_license', '');
+    $check = dokmeplus_check_license_remote($license);
+    set_transient('dokmeplus_license_check', $check, 12 * HOUR_IN_SECONDS);
+    return (bool) $check['valid'];
 }
 
-/* ------------------------------
- * صفحه پیش‌نمایش دکمه
- * ------------------------------ */
+/* ---------------------------
+ * Live Preview Page
+---------------------------- */
 function dokmeplus_live_page() {
     include plugin_dir_path(__FILE__) . 'live.php';
 }
 
-/* ------------------------------
- * شورت‌کد برای نمایش دکمه در سایت
- * [dokmeplus id="شناسه"]
- * ------------------------------ */
-add_shortcode('dokmeplus', 'dokmeplus_render_button');
-function dokmeplus_render_button($atts) {
-    $atts = shortcode_atts([
-        'id' => ''
-    ], $atts);
+/* ---------------------------
+ * Button List Page
+---------------------------- */
+function dokmeplus_list_page() {
+    include plugin_dir_path(__FILE__) . 'list.php';
+}
 
+/* ---------------------------
+ * Add / Edit Button Page
+---------------------------- */
+function dokmeplus_form_page() {
+    // Free version limit: 3 buttons
+    $all = get_option('dokmeplus_buttons', []);
+    if (!dokmeplus_is_license_valid() && count($all) >= 3 && !isset($_GET['edit_id'])) {
+        wp_safe_redirect(admin_url('admin.php?page=dokmeplus&blocked=1'));
+        exit;
+    }
+
+    include plugin_dir_path(__FILE__) . 'form.php';
+}
+
+/* ---------------------------
+ * Settings Page
+---------------------------- */
+function dokmeplus_settings_page() {
+    include plugin_dir_path(__FILE__) . 'settings.php';
+}
+
+/* ---------------------------
+ * About Page
+---------------------------- */
+function dokmeplus_about_page() {
+    echo '<div class="wrap"><h1>About Developer</h1>';
+    echo '<p>This plugin is created with ❤ by <a href="https://hajirahimi.ir" target="_blank">Hajirahimi</a>.</p></div>';
+}
+
+/* ---------------------------
+ * Shortcode for Displaying Buttons
+---------------------------- */
+add_shortcode('dokmeplus', function($atts) {
+    $atts = shortcode_atts(['id' => ''], $atts);
     $all = get_option('dokmeplus_buttons', []);
     $id = sanitize_text_field($atts['id']);
 
-    if (!$id || !isset($all[$id])) {
-        return '';
-    }
+    if (!$id || !isset($all[$id])) return '';
 
     $btn = $all[$id];
     $style = sprintf(
@@ -107,7 +169,6 @@ function dokmeplus_render_button($atts) {
         intval($btn['size'])
     );
 
-    // تعیین نوع عملکرد دکمه
     switch ($btn['action']) {
         case 'call':
             $href = 'tel:' . esc_attr($btn['call_number']);
@@ -118,53 +179,14 @@ function dokmeplus_render_button($atts) {
                 $href .= '?body=' . urlencode($btn['sms_message']);
             }
             break;
-        case 'link':
         default:
             $href = !empty($btn['link']) ? esc_url($btn['link']) : '#';
             break;
     }
 
-    return sprintf(
-        '<a href="%s" style="%s" target="_blank">%s</a>',
+    return sprintf('<a href="%s" style="%s" target="_blank">%s</a>',
         esc_url($href),
         esc_attr($style),
         esc_html($btn['text'])
     );
-}
-
-/* ------------------------------
- * توابع کمکی
- * ------------------------------ */
-function dokmeplus_t($key) {
-    // اینجا می‌توانید سیستم ترجمه را اضافه کنید
-    $translations = [
-        'list_title'      => 'لیست دکمه‌ها',
-        'add_button'      => 'افزودن دکمه',
-        'edit_button'     => 'ویرایش دکمه',
-        'label_title'     => 'عنوان دکمه',
-        'label_text'      => 'متن دکمه',
-        'label_color'     => 'رنگ',
-        'label_size'      => 'اندازه فونت',
-        'label_action'    => 'عملکرد',
-        'label_link'      => 'لینک',
-        'label_copy_text' => 'متن برای کپی',
-        'label_send_text' => 'متن برای ارسال',
-        'label_call_number' => 'شماره تماس',
-        'label_sms_number'  => 'شماره پیامک',
-        'shortcode'       => 'شورت‌کد',
-        'actions'         => 'عملیات',
-        'edit'            => 'ویرایش',
-        'delete'          => 'حذف',
-        'confirm_delete'  => 'آیا مطمئن هستید؟',
-        'no_buttons'      => 'هیچ دکمه‌ای یافت نشد.',
-        'saved'           => 'ذخیره شد',
-        'action_link'     => 'لینک',
-        'action_copy'     => 'کپی متن',
-        'action_send'     => 'ارسال به اشتراک',
-        'action_call'     => 'تماس',
-        'action_sms'      => 'ارسال پیامک',
-    ];
-
-    return $translations[$key] ?? $key;
-}
-
+});
