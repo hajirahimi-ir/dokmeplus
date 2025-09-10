@@ -12,7 +12,60 @@
  * Domain Path: /languages
  */
 
+
 if ( ! defined('ABSPATH') ) exit;
+
+// Fallback translation function (ensures older include files that use dokmeplus_t() won't fatal)
+if ( ! function_exists('dokmeplus_t') ) {
+    function dokmeplus_t( $key ) {
+        $strings = [
+            'menu_main'        => 'Dokme Plus',
+            'menu_list'        => 'Buttons',
+            'menu_add'         => 'Add Button',
+            'menu_settings'    => 'Settings',
+            'menu_about'       => 'About Developer',
+            'list_title'       => 'Buttons List',
+            'add_button'       => 'Add Button',
+            'edit_button'      => 'Edit Button',
+            'shortcode'        => 'Shortcode',
+            'actions'          => 'Actions',
+            'edit'             => 'Edit',
+            'delete'           => 'Delete',
+            'confirm_delete'   => 'Delete this?',
+            'no_buttons'       => 'No buttons found.',
+            'label_title'      => 'Button Title',
+            'label_text'       => 'Button Text',
+            'label_color'      => 'Color',
+            'label_size'       => 'Font Size (px)',
+            'label_action'     => 'Action',
+            'action_link'      => 'Link',
+            'action_copy'      => 'Copy',
+            'action_send'      => 'Share',
+            'action_call'      => 'Call',
+            'action_sms'       => 'SMS',
+            'label_link'       => 'Link',
+            'label_copy_text'  => 'Copy Text',
+            'label_send_text'  => 'Share Text',
+            'label_call_number'=> 'Phone Number',
+            'label_sms_number' => 'Number',
+            'label_sms_message'=> 'Message',
+            'saved'            => 'Saved.',
+            'settings_title'   => 'Plugin Settings',
+            'language'         => 'Language',
+            'license'          => 'License Key',
+            'license_buy'      => 'Buy License Key',
+            'save_changes'     => 'Save Changes',
+            'license_missing'  => 'Please enter a license key in plugin Settings.',
+            'license_invalid'  => 'License key is invalid.',
+            'license_error'    => 'License check failed (connection error).',
+            'license_ok'       => 'License is valid.',
+            'add_blocked'      => 'You can create up to 3 buttons without a valid license. Enter a license to create more.',
+            'about_text'       => 'This plugin is made with ❤ by Hajirahimi',
+        ];
+        return $strings[$key] ?? $key;
+    }
+}
+
 
 /* ---------------------------
   License API Settings
@@ -72,6 +125,92 @@ add_action('admin_menu', function() {
         'dokmeplus_live_page'
     );
 });
+
+/* ---------------------------
+ * GitHub Auto Update System
+---------------------------- */
+add_action('init', function() {
+    if (is_admin()) {
+        new DokmePlus_GitHub_Updater();
+    }
+});
+
+class DokmePlus_GitHub_Updater {
+    private $plugin_file;
+    private $github_api;
+    private $plugin_slug;
+
+    public function __construct() {
+        $this->plugin_file = plugin_basename(__FILE__);
+        $this->plugin_slug = dirname($this->plugin_file);
+        $this->github_api  = 'https://api.github.com/repos/YOUR_GITHUB_USERNAME/YOUR_REPOSITORY/releases/latest';
+
+        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_update']);
+        add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
+    }
+
+    // Check for update
+    public function check_for_update($transient) {
+        if (empty($transient->checked)) {
+            return $transient;
+        }
+
+        $remote = wp_remote_get($this->github_api, [
+            'headers' => ['User-Agent' => 'WordPress']
+        ]);
+
+        if (!is_wp_error($remote) && isset($remote['response']['code']) && $remote['response']['code'] == 200) {
+            $data = json_decode(wp_remote_retrieve_body($remote));
+            if (isset($data->tag_name)) {
+                $plugin_data = get_plugin_data(__FILE__);
+                $current_version = $plugin_data['Version'];
+                $latest_version = ltrim($data->tag_name, 'v');
+
+                if (version_compare($current_version, $latest_version, '<')) {
+                    $plugin = [
+                        'slug'        => $this->plugin_slug,
+                        'plugin'      => $this->plugin_file,
+                        'new_version' => $latest_version,
+                        'url'         => $data->html_url,
+                        'package'     => $data->zipball_url
+                    ];
+                    $transient->response[$this->plugin_file] = (object) $plugin;
+                }
+            }
+        }
+
+        return $transient;
+    }
+
+    // Display plugin info on update details screen
+    public function plugin_info($res, $action, $args) {
+        if ($action !== 'plugin_information' || $args->slug !== $this->plugin_slug) {
+            return $res;
+        }
+
+        $remote = wp_remote_get($this->github_api, [
+            'headers' => ['User-Agent' => 'WordPress']
+        ]);
+
+        if (!is_wp_error($remote) && isset($remote['response']['code']) && $remote['response']['code'] == 200) {
+            $data = json_decode(wp_remote_retrieve_body($remote));
+            $res = (object) [
+                'name'          => 'Dokme Plus',
+                'slug'          => $this->plugin_slug,
+                'version'       => ltrim($data->tag_name, 'v'),
+                'author'        => '<a href="https://hajirahimi.ir">Hajirahimi</a>',
+                'homepage'      => $data->html_url,
+                'sections'      => [
+                    'description' => $data->body
+                ],
+                'download_link' => $data->zipball_url,
+            ];
+        }
+
+        return $res;
+    }
+}
+
 
 /* ---------------------------
  * License System
@@ -190,5 +329,4 @@ add_shortcode('dokmeplus', function($atts) {
         esc_html($btn['text'])
     );
 });
-
 
