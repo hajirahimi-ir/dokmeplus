@@ -249,6 +249,82 @@ function dokmeplus_is_license_valid() {
 }
 
 /* ---------------------------
+ * Keep plugin active after update
+ * Tracks activation state & re-activates after plugin update
+---------------------------- */
+
+// Save plugin state when activated/deactivated (to restore after update)
+function dokmeplus_track_activation( $network_wide = false ) {
+    update_option( 'dokmeplus_should_be_active', true );
+    // Save whether it was network activated (for multisite)
+    update_option( 'dokmeplus_should_be_network_active', is_multisite() ? (bool) $network_wide : false );
+}
+
+function dokmeplus_track_deactivation( $network_wide = false ) {
+    update_option( 'dokmeplus_should_be_active', false );
+    update_option( 'dokmeplus_should_be_network_active', false );
+}
+
+// Hooks to track activation/deactivation
+register_activation_hook( __FILE__, 'dokmeplus_track_activation' );
+register_deactivation_hook( __FILE__, 'dokmeplus_track_deactivation' );
+
+// After the WordPress upgrade process finishes, re-activate the plugin if it was active before the update
+add_action( 'upgrader_process_complete', 'dokmeplus_reactivate_after_update', 10, 2 );
+
+function dokmeplus_reactivate_after_update( $upgrader_object, $options ) {
+
+    // Only run on plugin updates
+    if ( empty( $options['action'] ) || empty( $options['type'] ) ) {
+        return;
+    }
+    if ( $options['action'] !== 'update' || $options['type'] !== 'plugin' ) {
+        return;
+    }
+
+    if ( empty( $options['plugins'] ) || ! is_array( $options['plugins'] ) ) {
+        return;
+    }
+
+    $plugin_basename = plugin_basename( __FILE__ ); // Example: dokmeplus/dokmeplus.php
+
+    // If our plugin is not in the list of updated plugins, do nothing
+    if ( ! in_array( $plugin_basename, $options['plugins'], true ) ) {
+        return;
+    }
+
+    // Read saved state
+    $should_be_active  = get_option( 'dokmeplus_should_be_active', false );
+    $should_be_network = get_option( 'dokmeplus_should_be_network_active', false );
+
+    // If the plugin was manually deactivated by the user before the update, don't reactivate it
+    if ( ! $should_be_active ) {
+        return;
+    }
+
+    // Load required functions for activation
+    if ( ! function_exists( 'activate_plugin' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    }
+
+    // If this is a multisite and the plugin was network activated, reactivate it network-wide
+    if ( is_multisite() && $should_be_network ) {
+        if ( ! is_plugin_active_for_network( $plugin_basename ) ) {
+            activate_plugin( $plugin_basename, '', true );
+        }
+    } else {
+        // Otherwise, just activate normally
+        if ( ! is_plugin_active( $plugin_basename ) ) {
+            activate_plugin( $plugin_basename );
+        }
+    }
+
+    // (Optional) Save timestamp of the last auto-reactivation for debugging purposes
+    update_option( 'dokmeplus_last_auto_reactivated', current_time( 'mysql' ) );
+}
+
+
+/* ---------------------------
  * Live Preview Page
 ---------------------------- */
 function dokmeplus_live_page() {
