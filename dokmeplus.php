@@ -3,7 +3,7 @@
  * Plugin Name: Dokme Plus
  * Plugin URI: https://hamtamehr.ir/shop/kf-j59n/lo55hg22
  * Description: Manage custom buttons with live preview and license system. Free version supports up to 3 buttons.
- * Version: 1.12.0
+ * Version: 1.15.19
  * Author: Hajirahimi
  * Author URI: https://hajirahimi.ir
  * License: GPLv2 or later
@@ -190,3 +190,4 @@ add_shortcode('dokmeplus', function($atts) {
         esc_html($btn['text'])
     );
 });
+
