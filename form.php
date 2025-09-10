@@ -1,12 +1,12 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-// بارگذاری داده‌ها
+// Load data
 $all = get_option('dokmeplus_buttons', []);
 $edit_id = isset($_GET['edit_id']) ? sanitize_text_field($_GET['edit_id']) : '';
 $edit = ($edit_id && isset($all[$edit_id])) ? $all[$edit_id] : [];
 
-// پردازش ارسال فرم (ذخیره‌سازی)
+// Process form submission (save data)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options')) {
 
     if ( ! isset($_POST['_dokmeplus_nonce']) || ! wp_verify_nonce( wp_unslash($_POST['_dokmeplus_nonce']), 'dokmeplus_save' ) ) {
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
         'sms_message'  => sanitize_textarea_field($_POST['sms_message'] ?? ''),
     ];
 
-    // تولید یا بروزرسانی شناسه
+    // Generate or update button ID
     if (!empty($edit_id)) {
         $id = $edit_id;
     } else {
@@ -114,12 +114,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
         </table>
 
         <p class="submit">
-            <?php submit_button('ذخیره تغییرات', 'primary', 'submit', false); ?>
+            <?php submit_button('Save Changes', 'primary', 'submit', false); ?>
 
             <?php if ( !empty($edit_id) ) : ?>
                 <a href="<?php echo admin_url('admin.php?page=dokmeplus_live&id=' . urlencode($edit_id)); ?>" 
                    class="button-secondary" target="_blank" style="margin-left:10px;">
-                   پیش‌نمایش دکمه
+                   Button Preview
                 </a>
             <?php endif; ?>
         </p>
@@ -130,7 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && current_user_can('manage_options'))
 (function(){
     window.toggleFields = function(action){
         var rows = ['row_link','row_copy','row_send','row_call','row_sms'];
-        rows.forEach(function(r){ var el = document.getElementById(r); if(el) el.style.display = 'none'; });
+        rows.forEach(function(r){ 
+            var el = document.getElementById(r); 
+            if(el) el.style.display = 'none'; 
+        });
         var target = document.getElementById('row_' + action);
         if (target) target.style.display = 'table-row';
     };
