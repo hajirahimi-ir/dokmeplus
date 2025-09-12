@@ -16,6 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+require_once plugin_dir_path(__FILE__) . 'language.php';
+
 /**
  * Backward-compatible translation helper (fallback)
  * If you prefer WP i18n, you can replace dokmeplus_t() with __()/esc_html__ etc.
@@ -514,3 +516,4 @@ add_shortcode( 'dokmeplus', function( $atts ) {
         $text
     );
 } );
+
