@@ -42,8 +42,9 @@ function dokmeplus_get_languages() {
             'saved'            => 'ذخیره شد.',
             'settings_title'   => 'تنظیمات افزونه',
             'language'         => 'زبان',
+            'language_desc' => 'زبان افزونه را انتخاب کنید.',
             'license'          => 'کلید لایسنس',
-            'license_buy'      => 'خرید لایسنس',
+            'license_buy_link' => 'خرید لایسنس از اینجا',
             'save_changes'     => 'ذخیره تغییرات',
             'license_missing'  => 'لطفاً کلید لایسنس را در تنظیمات وارد کنید.',
             'license_invalid'  => 'کلید لایسنس معتبر نیست.',
@@ -51,6 +52,10 @@ function dokmeplus_get_languages() {
             'license_ok'       => 'لایسنس معتبر است.',
             'add_blocked'      => 'شما فقط می‌توانید تا ۳ دکمه بدون لایسنس ایجاد کنید. برای ایجاد دکمه‌های بیشتر، لایسنس وارد کنید.',
             'about_text'       => 'این افزونه با ❤ توسط حاجی‌رحیمی ساخته شده است',
+            'license_limit_title'   => 'در نسخه رایگان فقط می‌توانید حداکثر ۳ دکمه بسازید.',
+            'license_limit_desc'    => 'برای ساخت دکمه‌های بیشتر، باید یک لایسنس معتبر خریداری و فعال کنید.',
+            'license_limit_button'  => 'رفتن به تنظیمات و خرید لایسنس',
+
         ],
         'en' => [
             'menu_main'        => 'Dokme Plus',
@@ -86,8 +91,9 @@ function dokmeplus_get_languages() {
             'saved'            => 'Saved.',
             'settings_title'   => 'Plugin Settings',
             'language'         => 'Language',
+            'language_desc' => 'Select the plugin language.',
             'license'          => 'License Key',
-            'license_buy'      => 'Buy License Key',
+            'license_buy_link' => 'Buy a license key here',
             'save_changes'     => 'Save Changes',
             'license_missing'  => 'Please enter a license key in plugin Settings.',
             'license_invalid'  => 'License key is invalid.',
@@ -95,6 +101,11 @@ function dokmeplus_get_languages() {
             'license_ok'       => 'License is valid.',
             'add_blocked'      => 'You can create up to 3 buttons without a valid license. Enter a license to create more.',
             'about_text'       => 'This plugin is made with ❤ by Hajirahimi',
+            'license_limit_title'   => 'You can only create up to 3 buttons in the free version.',
+            'license_limit_desc'    => 'To create more buttons, you need to purchase and activate a valid license.',
+            'license_limit_button'  => 'Go to Settings & Buy License',
+
+            
         ]
     ];
 }
