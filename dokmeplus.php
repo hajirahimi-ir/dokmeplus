@@ -456,10 +456,12 @@ function dokmeplus_form_page() {
 
         // Display warning instead of redirect
         echo '<div class="notice notice-error is-dismissible">';
-        echo '<p><strong>You can only create up to 3 buttons in the free version.</strong></p>';
-        echo '<p>To create more buttons, you need to purchase and activate a valid license.</p>';
-        echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=dokmeplus_settings' ) ) . '">Go to Settings & Buy License</a></p>';
+        echo '<p><strong>' . esc_html( dokmeplus_t('license_limit_title') ) . '</strong></p>';
+        echo '<p>' . esc_html( dokmeplus_t('license_limit_desc') ) . '</p>';
+        echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=dokmeplus_settings' ) ) . '">'
+    . esc_html( dokmeplus_t('license_limit_button') ) . '</a></p>';
         echo '</div>';
+
 
         return; // Stop further execution
     }
@@ -558,3 +560,4 @@ add_shortcode( 'dokmeplus', function( $atts ) {
         $text
     );
 } );
+
