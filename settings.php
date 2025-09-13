@@ -24,7 +24,12 @@ $current_lang = get_option('dokmeplus_language', 'en');
                 <th scope="row"><label for="license_key" data-dokmeplus-key="license"><?php echo esc_html( dokmeplus_t('license') ); ?></label></th>
                 <td>
                     <input type="text" id="license_key" name="license_key" value="<?php echo esc_attr($license); ?>" class="regular-text" />
-                    <p class="description" data-dokmeplus-key="license_buy"><?php echo esc_html( dokmeplus_t('license_buy') ); ?></p>
+                    <p class="description">
+                    <a href="https://hamtamehr.ir/shop/kf-j59n/lo55hg22" target="_blank" data-dokmeplus-key="license_buy_link">
+                    <?php echo esc_html( dokmeplus_t('license_buy_link') ); ?>
+    </a>
+</p>
+
                 </td>
             </tr>
 
@@ -35,7 +40,10 @@ $current_lang = get_option('dokmeplus_language', 'en');
                         <option value="en" <?php selected($current_lang, 'en'); ?>>English</option>
                         <option value="fa" <?php selected($current_lang, 'fa'); ?>>فارسی</option>
                     </select>
-                    <p class="description" data-dokmeplus-key="language_desc">Select the plugin language.</p>
+                    <p class="description" data-dokmeplus-key="language_desc">
+    <?php echo esc_html( dokmeplus_t('language_desc') ); ?>
+                    </p>
+
                 </td>
             </tr>
         </table>
