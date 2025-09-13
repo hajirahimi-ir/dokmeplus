@@ -18,6 +18,38 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once plugin_dir_path(__FILE__) . 'language.php';
 
+// AJAX handler to save settings and return translations
+add_action( 'wp_ajax_dokmeplus_save_settings', 'dokmeplus_save_settings_ajax' );
+function dokmeplus_save_settings_ajax() {
+    // capability & nonce check
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( 'permission_denied' );
+    }
+    check_admin_referer( 'dokmeplus_settings_save' );
+
+    $license  = isset( $_POST['license_key'] ) ? sanitize_text_field( wp_unslash( $_POST['license_key'] ) ) : '';
+    $language = isset( $_POST['language'] ) ? sanitize_text_field( wp_unslash( $_POST['language'] ) ) : 'en';
+
+    update_option( 'dokmeplus_license', $license );
+    update_option( 'dokmeplus_language', $language );
+
+    // clear cached license check so it can re-run (optional but useful)
+    if ( defined( 'DOKMEPLUS_TRANSIENT_LICENSE' ) ) {
+        delete_transient( DOKMEPLUS_TRANSIENT_LICENSE );
+    }
+
+    // Return translation strings for the requested language
+    if ( function_exists( 'dokmeplus_get_languages' ) ) {
+        $all_langs = dokmeplus_get_languages();
+        $payload = isset( $all_langs[ $language ] ) ? $all_langs[ $language ] : $all_langs['en'];
+    } else {
+        $payload = [];
+    }
+
+    wp_send_json_success( [ 'translations' => $payload ] );
+}
+
+
 /**
  * Backward-compatible translation helper (fallback)
  * If you prefer WP i18n, you can replace dokmeplus_t() with __()/esc_html__ etc.
@@ -123,15 +155,17 @@ add_action( 'admin_menu', function() {
         'dokmeplus_settings',
         'dokmeplus_settings_page'
     );
+    
 
     add_submenu_page(
         'dokmeplus',
-        dokmeplus_t('menu_about'),
-        'About',
+        dokmeplus_t('menu_about'), // عنوان صفحه
+        dokmeplus_t('menu_about'), // متن منو هم داینامیک شد
         'manage_options',
         'dokmeplus_about',
         'dokmeplus_about_page'
     );
+
 
     // Hidden submenu for live preview
     add_submenu_page(
@@ -451,9 +485,17 @@ function dokmeplus_settings_page() {
 }
 
 function dokmeplus_about_page() {
-    echo '<div class="wrap"><h1>About Developer</h1>';
-    echo '<p>This plugin is created with ❤ by <a href="https://hajirahimi.ir" target="_blank">Hajirahimi</a>.</p></div>';
+    echo '<div class="wrap">';
+    
+    // عنوان صفحه درباره
+    echo '<h1>' . esc_html(dokmeplus_t('menu_about')) . '</h1>';
+    
+    // متن درباره با لینک
+    echo '<p>' . esc_html(dokmeplus_t('about_text')) . ' <a href="https://hajirahimi.ir" target="_blank">Hajirahimi</a>.</p>';
+    
+    echo '</div>';
 }
+
 
 function dokmeplus_live_page() {
     $path = plugin_dir_path( __FILE__ ) . 'live.php';
@@ -516,4 +558,3 @@ add_shortcode( 'dokmeplus', function( $atts ) {
         $text
     );
 } );
-
