@@ -126,6 +126,91 @@ add_action( 'plugins_loaded', function() {
 });
 
 /* ---------------------------
+ * Handle delete & copy actions (admin_init)
+ *
+ * We keep these actions here to ensure they run before any output is sent.
+ * They redirect back to the list page with ?msg=...
+---------------------------- */
+add_action( 'admin_init', 'dokmeplus_handle_admin_actions' );
+function dokmeplus_handle_admin_actions() {
+
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+
+    // only run when we're on the plugin page - optional but safer
+    $is_plugin_page = ( isset( $_GET['page'] ) && in_array( $_GET['page'], [ 'dokmeplus', 'dokmeplus_add', 'dokmeplus_settings', 'dokmeplus_about' ], true ) );
+    // allow when page parameter missing (direct links) as well
+    // if you prefer stricter check, uncomment next line:
+    // if ( ! $is_plugin_page ) return;
+
+    $all = get_option( 'dokmeplus_buttons', [] );
+    $redirect = admin_url( 'admin.php?page=dokmeplus' );
+
+    // ----- DELETE -----
+    if ( isset( $_GET['delete_id'] ) ) {
+        $delete_id = sanitize_text_field( wp_unslash( $_GET['delete_id'] ) );
+        $nonce = isset( $_GET['_wpnonce'] ) ? wp_unslash( $_GET['_wpnonce'] ) : '';
+
+        if ( ! wp_verify_nonce( $nonce, 'dokmeplus_delete_' . $delete_id ) ) {
+            wp_safe_redirect( add_query_arg( 'msg', 'invalid', $redirect ) );
+            exit;
+        }
+
+        if ( isset( $all[ $delete_id ] ) ) {
+            unset( $all[ $delete_id ] );
+            update_option( 'dokmeplus_buttons', $all );
+            wp_safe_redirect( add_query_arg( 'msg', 'deleted', $redirect ) );
+            exit;
+        }
+
+        wp_safe_redirect( add_query_arg( 'msg', 'notfound', $redirect ) );
+        exit;
+    }
+
+    // ----- COPY -----
+    if ( isset( $_GET['copy_id'] ) ) {
+
+        $copy_id = sanitize_text_field( wp_unslash( $_GET['copy_id'] ) );
+        $nonce = isset( $_GET['_wpnonce'] ) ? wp_unslash( $_GET['_wpnonce'] ) : '';
+
+        if ( ! wp_verify_nonce( $nonce, 'dokmeplus_copy_' . $copy_id ) ) {
+            wp_safe_redirect( add_query_arg( 'msg', 'invalid', $redirect ) );
+            exit;
+        }
+
+        // Free version limit (3 items) unless license valid
+        if ( ! dokmeplus_is_license_valid() && count( $all ) >= 3 ) {
+            wp_safe_redirect( add_query_arg( 'msg', 'limit', $redirect ) );
+            exit;
+        }
+
+        if ( isset( $all[ $copy_id ] ) ) {
+            $original = $all[ $copy_id ];
+
+            // generate id (use wp_generate_uuid4 if available)
+            if ( function_exists( 'wp_generate_uuid4' ) ) {
+                $new_id = wp_generate_uuid4();
+            } else {
+                $new_id = uniqid( 'dok_', true );
+            }
+
+            $new = $original;
+            $new['title'] = ( $new['title'] ?? 'بدون عنوان' ) . ' (کپی)';
+
+            $all[ $new_id ] = $new;
+            update_option( 'dokmeplus_buttons', $all );
+
+            wp_safe_redirect( add_query_arg( 'msg', 'copied', $redirect ) );
+            exit;
+        }
+
+        wp_safe_redirect( add_query_arg( 'msg', 'notfound', $redirect ) );
+        exit;
+    }
+}
+
+/* ---------------------------
  * Admin Menus
 ---------------------------- */
 add_action( 'admin_menu', function() {
@@ -561,5 +646,4 @@ add_shortcode( 'dokmeplus', function( $atts ) {
         $text
     );
 } );
-
 
